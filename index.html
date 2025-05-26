@@ -365,24 +365,24 @@
                     "(3878 456771)"
                 ];
                 
-                const baseFontSize = canvas.width * 0.045; // Aumentado el porcentaje para fuente más grande
+                const baseFontSize = canvas.width * 0.045; 
                 const minFontSize = 12; 
-                const maxFontSize = 24; // Aumentado el máximo
+                const maxFontSize = 24; 
                 const fontSize = Math.max(minFontSize, Math.min(baseFontSize, maxFontSize));
 
                 ctx.fillStyle = '#004d40'; 
                 ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle'; // Ayuda a centrar verticalmente
+                ctx.textBaseline = 'middle'; 
 
-                const lineHeight = fontSize * 1.5; // Aumentado para más espacio
+                const lineHeight = fontSize * 1.5; 
                 const totalTextHeight = messages.length * lineHeight;
-                let startY = (canvas.height - totalTextHeight) / 2 + (lineHeight / 2); // Centrar el bloque de texto verticalmente
+                let startY = (canvas.height - totalTextHeight) / 2 + (lineHeight / 2); 
 
                 messages.forEach((line, index) => {
                     if (index === 0) { 
-                         ctx.font = `bold ${fontSize * 1.15}px 'Arial Rounded MT Bold'`; // Un poco más grande
+                         ctx.font = `bold ${fontSize * 1.15}px 'Arial Rounded MT Bold'`; 
                     } else if (index === 1) { 
-                         ctx.font = `italic ${fontSize * 1.05}px 'Arial Rounded MT Bold'`; // Un poco más grande
+                         ctx.font = `italic ${fontSize * 1.05}px 'Arial Rounded MT Bold'`; 
                     }
                     else {
                          ctx.font = `${fontSize}px 'Arial Rounded MT Bold'`;
@@ -466,20 +466,21 @@
             { // 6 - PASO FINAL MODIFICADO
                 title: "¡Excelente Trabajo!",
                 explanation: "¡Has completado el ejercicio de respiración! Puedes usar estas técnicas siempre que necesites un momento de calma.", 
-                duration: 11000, // Aumentada para leer el texto en canvas
+                duration: 11000, 
                 action: () => {
-                    breathPhase = 'idle_final'; // Nueva fase para asegurar que la nube no se anime
+                    breathPhase = 'idle_final'; 
                     showVibration = false;
-                    cloudSize = 0; // Hacer desaparecer la nube
+                    cloudSize = 0; 
                     counterDisplayElem.textContent = ""; 
                     simulationRunning = false;
                     displayFinalMessageOnCanvas = true; 
-                },
-                onExit: () => {
+                    // Mostrar el botón de reinicio inmediatamente
                     startButton.textContent = "Reiniciar Ejercicio";
                     startButton.classList.remove('hidden');
                     startButton.disabled = false;
-                    displayFinalMessageOnCanvas = false; 
+                },
+                onExit: () => { // Esta función se llama después de la duración del paso
+                    // displayFinalMessageOnCanvas = false; // Se maneja en initializeSimulationState al reiniciar
                 }
             }
         ];
@@ -510,24 +511,22 @@
             if (!lastFrameTime) lastFrameTime = timestamp;
             lastFrameTime = timestamp;
 
-            // Solo animar la nube si no estamos mostrando el mensaje final
             if (!displayFinalMessageOnCanvas) {
                 const targetSizeFactor = (breathPhase === 'inhale') ? 1.3 : (breathPhase === 'exhale_slow' || breathPhase === 'humming') ? 0.8 : (breathPhase === 'idle_calm') ? 0.9 : 1;
-                const targetCloudSize = baseCloudSize * targetSizeFactor;
-                cloudSize += (targetCloudSize - cloudSize) * 0.05;
+                // Si es idle_final, cloudSize ya es 0, así que no se animará.
+                const targetCloudSize = (breathPhase === 'idle_final') ? 0 : baseCloudSize * targetSizeFactor;
+                cloudSize += (targetCloudSize - cloudSize) * 0.05; // Se reducirá a 0 si target es 0
 
                 if (breathPhase === 'inhale' && Math.random() < 0.3) {
                     particleSystem.addParticle('inhale');
                 } else if ((breathPhase === 'exhale_slow' || breathPhase === 'humming') && Math.random() < 0.2) {
                     particleSystem.addParticle('exhale');
                 }
-            } else {
-                // Si es el mensaje final, la nube ya debería estar en tamaño 0 o no dibujarse
             }
-
+            
             drawCurrentState(); 
             
-            if (simulationRunning || displayFinalMessageOnCanvas) { // Continuar el loop si la simulación corre O si se muestra el mensaje final (para redibujar en resize)
+            if (simulationRunning || displayFinalMessageOnCanvas) { 
                  animationFrameId = requestAnimationFrame(animationLoop); 
             }
         }
@@ -573,21 +572,26 @@
                     nextStep();
                 }, stepData.duration);
 
-            } else {
+            } else { // Fin de la simulación o se detuvo
+                // Si la simulación no está corriendo pero SÍ estamos mostrando el mensaje final,
+                // la lógica de onExit del último paso ya se habrá encargado del botón.
                 if (!displayFinalMessageOnCanvas) { 
-                    simulationRunning = false;
+                    simulationRunning = false; // Asegurar que esté false si no es el mensaje final
                     if (animationFrameId) {
                         cancelAnimationFrame(animationFrameId);
                         animationFrameId = null;
                     }
                 }
+                 // Si currentStepIndex está fuera de los límites (simulación completada)
                 if (currentStepIndex >= simulationSteps.length) {
-                     const lastStep = simulationSteps[simulationSteps.length -1];
-                     if(lastStep && typeof lastStep.onExit === 'function' && !startButton.disabled) {
-                        // No llamar onExit de nuevo
-                     } else if (lastStep && typeof lastStep.onExit === 'function') {
-                         lastStep.onExit.call(lastStep);
-                     }
+                    simulationRunning = false; // Asegurar que la simulación se marque como no corriendo
+                    // La acción del último paso ya maneja la aparición del botón de reinicio.
+                    // El onExit del último paso (si tuviera lógica adicional) se llamaría aquí,
+                    // pero ya hemos movido la lógica del botón a la 'action' del último paso.
+                    const lastStep = simulationSteps[simulationSteps.length - 1];
+                    if (lastStep && typeof lastStep.onExit === 'function') {
+                         lastStep.onExit.call(lastStep); // Llamar onExit para limpieza si es necesario
+                    }
                 }
             }
         }
@@ -612,7 +616,7 @@
 
 
         function initializeSimulationState() {
-            cloudSize = baseCloudSize; // Restaurar tamaño de nube al reiniciar
+            cloudSize = baseCloudSize; 
             breathPhase = 'idle';
             breathCount = 0;
             maxBreathCount = 0;
