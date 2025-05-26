@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulación de Respiración para Calmar la Mente</title>
+    <style>
+        body {
+            font-family: 'Arial Rounded MT Bold', 'Helvetica Rounded', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #e0f7fa; /* Azul cielo muy claro */
+            color: #333;
+            padding-top: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        #simulationContainer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 90%;
+            max-width: 600px;
+            background-color: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            color: #00796b; /* Verde azulado oscuro */
+            margin-bottom: 20px;
+            font-size: 1.6em;
+        }
+
+        canvas {
+            border: 2px solid #b2dfdb; /* Verde azulado claro */
+            border-radius: 15px;
+            background-color: #f0fcfc; 
+            width: 100%;
+            height: auto;
+            aspect-ratio: 4 / 3;
+            max-height: 350px;
+        }
+
+        #explanationArea {
+            width: 100%;
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #c8e6c9; /* Verde pastel claro */
+            border: 1px solid #a5d6a7; /* Verde pastel medio */
+            border-radius: 10px;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+
+        #explanationArea h3 {
+            margin: 0 0 8px 0;
+            color: #2e7d32; /* Verde oscuro */
+            font-size: 1.3em;
+        }
+
+        #explanationArea p {
+            margin: 0;
+            font-size: 1em;
+            line-height: 1.5;
+            color: #388e3c; /* Verde medio */
+        }
+
+        #startButton {
+            background-color: #ff8a65; /* Naranja coral claro */
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            margin-top: 25px;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.15);
+        }
+
+        #startButton:hover {
+            background-color: #ff7043; /* Naranja coral más intenso */
+        }
+        #startButton:active {
+            transform: scale(0.97);
+        }
+        #startButton:disabled {
+            background-color: #b0bec5; /* Gris azulado */
+            cursor: not-allowed;
+        }
+        
+        .counter-text {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #004d40; /* Verde azulado muy oscuro */
+            position: absolute; /* Se posicionará relativo al canvas si el canvas es 'position: relative' */
+            /* Estas propiedades se ajustarán en JS para centrar en el canvas */
+        }
+
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.4em;
+            }
+            #simulationContainer {
+                width: 95%;
+                padding: 15px;
+            }
+            #explanationArea h3 {
+                font-size: 1.15em;
+            }
+            #explanationArea p {
+                font-size: 0.9em;
+            }
+            #startButton {
+                padding: 12px 25px;
+                font-size: 1.1em;
+            }
+            canvas {
+                 max-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="simulationContainer">
+        <h1>Respira y ¡Cálmate como una Nubecita Feliz!</h1>
+        <div style="position: relative; width: 100%;"> <canvas id="breathingCanvas"></canvas>
+            <div id="counterDisplay" class="counter-text"></div>
+        </div>
+        <div id="explanationArea">
+            <h3 id="stepTitle">¡Hola, explorador/a de la calma!</h3>
+            <p id="stepExplanation">Presiona el botón para aprender unos trucos de respiración mágica.</p>
+        </div>
+        <button id="startButton">¡Aprende a Respirar y Calmarte!</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('breathingCanvas');
+        const ctx = canvas.getContext('2d');
+        const startButton = document.getElementById('startButton');
+        const stepTitleElem = document.getElementById('stepTitle');
+        const stepExplanationElem = document.getElementById('stepExplanation');
+        const counterDisplayElem = document.getElementById('counterDisplay');
+
+        let currentStepTimeoutId;
+        let animationFrameId;
+        let currentStepIndex = 0;
+        
+        // Estado de la animación
+        let cloudSize = 100;
+        let baseCloudSize = 100;
+        let breathPhase = 'idle'; // 'inhale', 'exhale', 'humming'
+        let breathCount = 0;
+        let maxBreathCount = 0;
+        let particleSystem;
+        let showVibration = false;
+        let cloudX, cloudY;
+
+        function resizeCanvas() {
+            const containerWidth = canvas.parentElement.offsetWidth;
+            canvas.width = containerWidth;
+            canvas.height = containerWidth * (3 / 4); // Mantener aspect ratio 4:3
+
+            // Centrar el contador de texto sobre el canvas
+            counterDisplayElem.style.left = `${canvas.offsetLeft + canvas.width / 2 - counterDisplayElem.offsetWidth / 2}px`;
+            counterDisplayElem.style.top = `${canvas.offsetTop + canvas.height / 2 - counterDisplayElem.offsetHeight / 2 - 20}px`; // Un poco arriba del centro
+
+            cloudX = canvas.width / 2;
+            cloudY = canvas.height / 2;
+            baseCloudSize = Math.min(canvas.width, canvas.height) * 0.3; // Tamaño base de la nube
+            cloudSize = baseCloudSize;
+
+            if (particleSystem) particleSystem.canvasResized(canvas.width, canvas.height);
+            drawCurrentState(); // Redibujar con nuevos tamaños
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // --- Personaje: Nubecita ---
+        function drawCloud(x, y, size, isHumming = false) {
+            ctx.fillStyle = '#fff'; // Nube blanca
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetX = 5;
+            ctx.shadowOffsetY = 5;
+
+            // Cuerpo principal de la nube
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x - size * 0.5, y + size * 0.2, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x + size * 0.5, y + size * 0.2, size * 0.45, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x - size * 0.2, y - size * 0.3, size * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x + size * 0.3, y - size * 0.35, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.shadowColor = 'transparent'; // Reset shadow
+
+            // Ojos
+            ctx.fillStyle = '#555';
+            const eyeRadius = size * 0.06;
+            const eyeOffsetX = size * 0.2;
+            const eyeOffsetY = -size * 0.05;
+            ctx.beginPath();
+            ctx.arc(x - eyeOffsetX, y + eyeOffsetY, eyeRadius, 0, Math.PI * 2); // Ojo izquierdo
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x + eyeOffsetX, y + eyeOffsetY, eyeRadius, 0, Math.PI * 2); // Ojo derecho
+            ctx.fill();
+
+            // Boca
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = size * 0.03;
+            ctx.beginPath();
+            if (isHumming || breathPhase === 'exhale_slow' || breathPhase === 'idle_calm') { // Boca sonriente o de zumbido
+                ctx.arc(x, y + size * 0.25, size * 0.2, 0, Math.PI);
+            } else if (breathPhase === 'inhale') { // Boca de 'o' para inhalar
+                 ctx.arc(x, y + size * 0.25, size * 0.15, 0, Math.PI * 2);
+            } else { // Boca normal
+                 ctx.arc(x, y + size * 0.25, size * 0.2, 0.2 * Math.PI, 0.8 * Math.PI);
+            }
+            ctx.stroke();
+
+            // Manitas para tapar oídos (si está zumbando)
+            if (isHumming) {
+                ctx.fillStyle = '#fff';
+                ctx.strokeStyle = '#aaa';
+                ctx.lineWidth = size * 0.02;
+                // Mano izquierda
+                ctx.beginPath();
+                ctx.ellipse(x - size * 0.6, y + eyeOffsetY + size * 0.1, size * 0.15, size * 0.2, Math.PI / 4, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+                // Mano derecha
+                ctx.beginPath();
+                ctx.ellipse(x + size * 0.6, y + eyeOffsetY + size * 0.1, size * 0.15, size * 0.2, -Math.PI / 4, 0, Math.PI * 2);
+                ctx.fill(); ctx.stroke();
+            }
+        }
+
+        // --- Partículas de Aire ---
+        class Particle {
+            constructor(startX, startY, type, canvasWidth, canvasHeight) {
+                this.x = startX;
+                this.y = startY;
+                this.size = Math.random() * 3 + 2; // Tamaño 2-5px
+                this.type = type; // 'inhale' o 'exhale'
+                this.canvasWidth = canvasWidth;
+                this.canvasHeight = canvasHeight;
+
+                if (type === 'inhale') {
+                    this.speedX = (cloudX - this.x) / (60 + Math.random() * 30); // Hacia la nube
+                    this.speedY = (cloudY + baseCloudSize * 0.2 - this.y) / (60 + Math.random() * 30); // Hacia la boca de la nube
+                    this.color = `rgba(173, 216, 230, ${Math.random() * 0.5 + 0.3})`; // Azul claro
+                } else { // exhale
+                    this.speedX = (Math.random() - 0.5) * 2; // Dispersión
+                    this.speedY = (Math.random() - 0.5) * 1.5 - 0.5; // Ligeramente hacia arriba
+                    this.color = `rgba(255, 223, 186, ${Math.random() * 0.5 + 0.3})`; // Naranja/amarillo suave
+                }
+                this.life = 80 + Math.random() * 40; // Duración de la partícula
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.life--;
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class ParticleSystem {
+            constructor(canvasWidth, canvasHeight) {
+                this.particles = [];
+                this.canvasWidth = canvasWidth;
+                this.canvasHeight = canvasHeight;
+            }
+            canvasResized(newWidth, newHeight) {
+                this.canvasWidth = newWidth;
+                this.canvasHeight = newHeight;
+            }
+
+            addParticle(type) {
+                let startX, startY;
+                if (type === 'inhale') {
+                    startX = Math.random() * this.canvasWidth;
+                    startY = Math.random() < 0.5 ? -10 : this.canvasHeight + 10; // Desde arriba o abajo
+                    if (Math.random() < 0.5) { // O desde los lados
+                       startX = Math.random() < 0.5 ? -10 : this.canvasWidth + 10;
+                       startY = Math.random() * this.canvasHeight;
+                    }
+                } else { // exhale
+                    startX = cloudX;
+                    startY = cloudY + baseCloudSize * 0.25; // Desde la boca de la nube
+                }
+                this.particles.push(new Particle(startX, startY, type, this.canvasWidth, this.canvasHeight));
+            }
+
+            updateAndDraw(ctx) {
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    this.particles[i].update();
+                    this.particles[i].draw(ctx);
+                    if (this.particles[i].life <= 0) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+            }
+        }
+        particleSystem = new ParticleSystem(canvas.width, canvas.height);
+
+        // --- Vibración para Abejita ---
+        function drawVibration(x, y, size) {
+            ctx.strokeStyle = 'rgba(100, 100, 200, 0.5)';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 3; i++) {
+                ctx.beginPath();
+                const radius = size * 0.8 + i * 15 + Math.sin(Date.now() / 100) * 5;
+                const startAngle = Math.random() * Math.PI;
+                ctx.arc(x, y - size * 0.1, radius, startAngle, startAngle + Math.PI * 0.3); // Arcos alrededor de la cabeza
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(x, y - size * 0.1, radius, startAngle + Math.PI, startAngle + Math.PI * 1.3);
+                ctx.stroke();
+            }
+        }
+        
+        // --- Dibujo principal ---
+        function drawCurrentState() {
+            if (!ctx) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Fondo (opcional, podría ser un gradiente suave)
+            // const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            // gradient.addColorStop(0, "#a1c4fd"); // Cielo azul claro
+            // gradient.addColorStop(1, "#c2e9fb"); // Cielo más claro
+            // ctx.fillStyle = gradient;
+            // ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+
+            particleSystem.updateAndDraw(ctx);
+            drawCloud(cloudX, cloudY, cloudSize, breathPhase === 'humming');
+            if (showVibration && breathPhase === 'humming') {
+                drawVibration(cloudX, cloudY, baseCloudSize);
+            }
+        }
+
+        // --- Lógica de la Simulación ---
+        const simulationSteps = [
+            { // 0
+                title: "¡Hola!",
+                explanation: "Vamos a aprender a respirar para sentirnos tranquilos como una tortuga sabia.",
+                duration: 4000,
+                action: () => { breathPhase = 'idle'; cloudSize = baseCloudSize; counterDisplayElem.textContent = ""; }
+            },
+            // Técnica 1: Volcán Tranquilo
+            { // 1
+                title: "Huele la Flor (Volcán)",
+                explanation: "Toma aire por la nariz como si olieras una flor. Inspira despacito...",
+                duration: 4000, // 1s para leer + 3s para respirar
+                action: () => {
+                    breathPhase = 'inhale'; maxBreathCount = 3; breathCount = 0;
+                    animateBreathCounter(1000); // Iniciar contador después de 1s
+                }
+            },
+            { // 2
+                title: "Sopla la Vela (Volcán)",
+                explanation: "Ahora, sopla el aire despacito por la boca, como si apagaras una vela sin que se vuele la llama.",
+                duration: 6000, // 1s para leer + 5s para respirar
+                action: () => {
+                    breathPhase = 'exhale_slow'; maxBreathCount = 5; breathCount = 0;
+                    animateBreathCounter(1000);
+                }
+            },
+            { // 3
+                title: "¡Repetimos el Volcán!",
+                explanation: "Huele la flor (3s), luego sopla la vela (5s). ¡Más tranquilo/a cada vez!",
+                duration: 9500, // (1s + 3s) + (0.5s + 5s)
+                action: () => {
+                    breathPhase = 'idle'; counterDisplayElem.textContent = "";
+                    setTimeout(() => { // Inhalar
+                        stepTitleElem.textContent = "Huele la Flor...";
+                        breathPhase = 'inhale'; maxBreathCount = 3; breathCount = 0; animateBreathCounter(0);
+                    }, 500);
+                    setTimeout(() => { // Exhalar
+                        stepTitleElem.textContent = "Sopla la Vela...";
+                        breathPhase = 'exhale_slow'; maxBreathCount = 5; breathCount = 0; animateBreathCounter(0);
+                    }, 4000); // Después de 0.5s + 3s de inhalación + 0.5s de pausa
+                }
+            },
+            // Técnica 2: Abejita Feliz
+            { // 4
+                title: "Listos para ser Abejitas",
+                explanation: "Ahora, vamos a ser abejitas. Toma aire por la nariz.",
+                duration: 4000, // 1s para leer + 3s para respirar
+                action: () => {
+                    breathPhase = 'inhale'; maxBreathCount = 3; breathCount = 0;
+                    animateBreathCounter(1000);
+                }
+            },
+            { // 5
+                title: "Zumbido de Abejita",
+                explanation: "Tapa tus oídos suavemente. Al sacar el aire por la nariz, haz un zumbido como una abejita: ¡Mmmmmm!",
+                duration: 7000, // 1s para leer + 6s para zumbar/exhalar
+                action: () => {
+                    breathPhase = 'humming'; maxBreathCount = 6; breathCount = 0; showVibration = true;
+                    animateBreathCounter(1000);
+                }
+            },
+            { // 6
+                title: "¡Repetimos la Abejita!",
+                explanation: "¡Qué bien suena! Aire adentro (3s), y luego el zumbido (6s). ¡Mmmmm!",
+                duration: 10500, // (1s + 3s) + (0.5s + 6s)
+                action: () => {
+                    breathPhase = 'idle'; showVibration = false; counterDisplayElem.textContent = "";
+                    setTimeout(() => {
+                        stepTitleElem.textContent = "Aire para la Abejita...";
+                        breathPhase = 'inhale'; maxBreathCount = 3; breathCount = 0; animateBreathCounter(0);
+                    }, 500);
+                    setTimeout(() => {
+                        stepTitleElem.textContent = "¡A Zumbar como Abejita!";
+                        breathPhase = 'humming'; maxBreathCount = 6; breathCount = 0; showVibration = true; animateBreathCounter(0);
+                    }, 4000);
+                }
+            },
+            { // 7
+                title: "¡Genial!",
+                explanation: "Ahora tu mente está más tranquila. Puedes hacer estas respiraciones cuando necesites calmarte. ¡Eres un experto/a!",
+                duration: 6000,
+                action: () => {
+                    breathPhase = 'idle_calm'; showVibration = false; cloudSize = baseCloudSize * 1.1; // Ligeramente más grande y calmada
+                    counterDisplayElem.textContent = "😊";
+                },
+                onExit: () => {
+                    startButton.textContent = "¡Respirar de Nuevo!";
+                    startButton.disabled = false;
+                }
+            }
+        ];
+
+        function animateBreathCounter(startDelay) {
+            setTimeout(() => {
+                breathCount = 0;
+                const intervalId = setInterval(() => {
+                    breathCount++;
+                    counterDisplayElem.textContent = breathCount;
+                    if (breathCount >= maxBreathCount) {
+                        clearInterval(intervalId);
+                        setTimeout(() => counterDisplayElem.textContent = "", 500); // Borrar después de un momento
+                    }
+                }, 1000); // Cada segundo
+            }, startDelay);
+        }
+        
+        let lastFrameTime = 0;
+        function animationLoop(timestamp) {
+            if (!lastFrameTime) lastFrameTime = timestamp;
+            const deltaTime = timestamp - lastFrameTime;
+            lastFrameTime = timestamp;
+
+            // Actualizar tamaño de la nube (pulmones)
+            const targetSizeFactor = (breathPhase === 'inhale') ? 1.3 : (breathPhase === 'exhale_slow' || breathPhase === 'humming') ? 0.8 : (breathPhase === 'idle_calm') ? 1.1 : 1;
+            const targetCloudSize = baseCloudSize * targetSizeFactor;
+            cloudSize += (targetCloudSize - cloudSize) * 0.05; // Suavizar animación
+
+            // Añadir partículas
+            if (breathPhase === 'inhale' && Math.random() < 0.3) {
+                particleSystem.addParticle('inhale');
+            } else if ((breathPhase === 'exhale_slow' || breathPhase === 'humming') && Math.random() < 0.2) {
+                particleSystem.addParticle('exhale');
+            }
+
+            drawCurrentState();
+            animationFrameId = requestAnimationFrame(animationLoop);
+        }
+
+        function nextStep() {
+            if (currentStepTimeoutId) clearTimeout(currentStepTimeoutId);
+            
+            const oldStepData = simulationSteps[currentStepIndex -1]; // El paso que acaba de terminar
+            if (oldStepData && typeof oldStepData.onExit === 'function') {
+                oldStepData.onExit.call(oldStepData);
+            }
+
+            if (currentStepIndex < simulationSteps.length) {
+                const stepData = simulationSteps[currentStepIndex];
+                stepTitleElem.textContent = stepData.title;
+                stepExplanationElem.textContent = stepData.explanation;
+                
+                if (typeof stepData.action === 'function') {
+                    stepData.action.call(stepData);
+                }
+                
+                currentStepTimeoutId = setTimeout(() => {
+                    currentStepIndex++;
+                    nextStep();
+                }, stepData.duration);
+            } else {
+                // Simulación completada (ya manejado por onExit del último paso)
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+            }
+        }
+
+        startButton.addEventListener('click', () => {
+            startButton.disabled = true;
+            startButton.textContent = "Respirando...";
+
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            if (currentStepTimeoutId) clearTimeout(currentStepTimeoutId);
+
+            currentStepIndex = 0;
+            initializeSimulationState(); // Función para resetear estados visuales si es necesario
+            resizeCanvas(); // Asegurar tamaños correctos
+            
+            animationFrameId = requestAnimationFrame(animationLoop);
+            nextStep();
+        });
+
+        function initializeSimulationState() {
+            cloudSize = baseCloudSize;
+            breathPhase = 'idle';
+            breathCount = 0;
+            maxBreathCount = 0;
+            showVibration = false;
+            particleSystem.particles = []; // Limpiar partículas existentes
+            counterDisplayElem.textContent = "";
+        }
+
+        // Inicialización al cargar
+        initializeSimulationState();
+        resizeCanvas(); // Llamar para establecer tamaño inicial y dibujar
+        // No iniciar animationLoop aquí, solo con el botón
+        drawCurrentState(); // Dibujar estado inicial
+
+    </script>
+</body>
+</html>
